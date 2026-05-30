@@ -36,7 +36,11 @@ func New(workerCount int, queueSize int) *Bus {
 func (b *Bus) Publish(eventID string, data any) {
 	defer func() {
 		if r := recover(); r != nil {
-			b.panicHandler(r)
+			b.lock.RLock()
+			handler := b.panicHandler
+			b.lock.RUnlock()
+
+			handler(r)
 		}
 	}()
 
@@ -93,7 +97,10 @@ func (b *Bus) worker() {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						b.panicHandler(r)
+						b.lock.RLock()
+						handler := b.panicHandler
+						b.lock.RUnlock()
+						handler(r)
 					}
 				}()
 
