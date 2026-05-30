@@ -50,13 +50,9 @@ func (b *Bus) Publish(eventID string, data any) {
 		}
 	}()
 
-	select {
-	case <-b.done:
-		return
-	case b.queue <- Event{
+	b.queue <- Event{
 		ID:   eventID,
 		Data: data,
-	}:
 	}
 }
 
@@ -84,6 +80,7 @@ func (b *Bus) Close() {
 		return
 	}
 
+	close(b.done)
 	close(b.queue)
 	b.wg.Wait()
 }
