@@ -1,3 +1,3 @@
 package eventbus
 
-type Handler func(Event[any])
+type Handler func(Event)

@@ -1,6 +1,6 @@
 package eventbus
 
-type Event[T any] struct {
+type Event struct {
 	ID   string
-	Data T
+	Data any
 }

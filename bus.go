@@ -6,7 +6,7 @@ import (
 
 type Bus struct {
 	events      map[string][]Handler
-	queue       chan Event[any]
+	queue       chan Event
 	workerCount int
 
 	lock         sync.RWMutex
@@ -19,7 +19,7 @@ type Bus struct {
 func New(workerCount int, queueSize int) *Bus {
 	b := &Bus{
 		events:       map[string][]Handler{},
-		queue:        make(chan Event[any], queueSize),
+		queue:        make(chan Event, queueSize),
 		workerCount:  workerCount,
 		done:         make(chan struct{}),
 		panicHandler: func(any) {},
@@ -43,7 +43,7 @@ func (b *Bus) Publish(eventID string, data any) {
 	select {
 	case <-b.done:
 		return
-	case b.queue <- Event[any]{
+	case b.queue <- Event{
 		ID:   eventID,
 		Data: data,
 	}:
