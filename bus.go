@@ -70,9 +70,15 @@ func (b *Bus) SetPanicHandler(handler func(any)) {
 }
 
 func (b *Bus) Close() {
+	select {
+	case <-b.done:
+		return
+	default:
+		close(b.done)
+	}
+
 	close(b.queue)
 	b.wg.Wait()
-	close(b.done)
 }
 
 func (b *Bus) worker() {
