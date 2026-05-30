@@ -145,9 +145,13 @@ func TestPanicHandlerPropagation(t *testing.T) {
 	bus := New(2, 10)
 	defer bus.Close()
 
+	var mu sync.Mutex
 	var panicValue any
+
 	bus.SetPanicHandler(func(r any) {
+		mu.Lock()
 		panicValue = r
+		mu.Unlock()
 	})
 
 	bus.Register("panic", func(e Event) {
@@ -157,9 +161,11 @@ func TestPanicHandlerPropagation(t *testing.T) {
 	bus.Publish("panic", nil)
 	time.Sleep(100 * time.Millisecond)
 
+	mu.Lock()
 	if panicValue != "custom error message" {
 		t.Errorf("expected 'custom error message', got %v", panicValue)
 	}
+	mu.Unlock()
 }
 
 func TestMultiplePanics(t *testing.T) {
@@ -384,17 +390,23 @@ func TestZeroQueueSize(t *testing.T) {
 	bus := New(2, 0)
 	defer bus.Close()
 
+	var mu sync.Mutex
 	var called bool
+
 	bus.Register("test", func(e Event) {
+		mu.Lock()
 		called = true
+		mu.Unlock()
 	})
 
 	bus.Publish("test", nil)
 	time.Sleep(100 * time.Millisecond)
 
+	mu.Lock()
 	if !called {
-		t.Error("handler should be called even with zero queue size")
+		t.Error("handler not called")
 	}
+	mu.Unlock()
 }
 
 func TestDifferentDataTypes(t *testing.T) {
@@ -433,17 +445,23 @@ func TestNilData(t *testing.T) {
 	bus := New(2, 10)
 	defer bus.Close()
 
+	var mu sync.Mutex
 	var received any
+
 	bus.Register("test", func(e Event) {
+		mu.Lock()
 		received = e.Data
+		mu.Unlock()
 	})
 
 	bus.Publish("test", nil)
 	time.Sleep(100 * time.Millisecond)
 
+	mu.Lock()
 	if received != nil {
 		t.Errorf("expected nil, got %v", received)
 	}
+	mu.Unlock()
 }
 
 func BenchmarkPublish(b *testing.B) {
