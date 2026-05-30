@@ -11,6 +11,7 @@ type Bus struct {
 	workerCount int
 
 	lock         sync.RWMutex
+	publishLock  sync.Mutex
 	wg           sync.WaitGroup
 	panicHandler func(any)
 
@@ -36,6 +37,9 @@ func New(workerCount int, queueSize int) *Bus {
 }
 
 func (b *Bus) Publish(eventID string, data any) {
+	b.publishLock.Lock()
+	defer b.publishLock.Unlock()
+
 	if b.closed.Load() {
 		return
 	}
@@ -80,8 +84,11 @@ func (b *Bus) Close() {
 		return
 	}
 
+	b.publishLock.Lock()
 	close(b.done)
 	close(b.queue)
+	b.publishLock.Unlock()
+
 	b.wg.Wait()
 }
 
