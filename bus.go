@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type Bus struct {
@@ -13,7 +14,8 @@ type Bus struct {
 	wg           sync.WaitGroup
 	panicHandler func(any)
 
-	done chan struct{}
+	done   chan struct{}
+	closed atomic.Bool
 }
 
 func New(workerCount int, queueSize int) *Bus {
@@ -34,6 +36,10 @@ func New(workerCount int, queueSize int) *Bus {
 }
 
 func (b *Bus) Publish(eventID string, data any) {
+	if b.closed.Load() {
+		return
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			b.lock.RLock()
@@ -74,11 +80,8 @@ func (b *Bus) SetPanicHandler(handler func(any)) {
 }
 
 func (b *Bus) Close() {
-	select {
-	case <-b.done:
+	if b.closed.Swap(true) {
 		return
-	default:
-		close(b.done)
 	}
 
 	close(b.queue)

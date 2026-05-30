@@ -242,23 +242,17 @@ func TestMultipleClose(t *testing.T) {
 	bus.Close() // second close should be safe
 	bus.Close() // third close should be safe
 }
-
 func TestPublishDuringClose(t *testing.T) {
 	bus := New(5, 10)
 
 	var wg sync.WaitGroup
-	var published int32
 
-	bus.Register("test", func(e Event) {
-		atomic.AddInt32(&published, 1)
-	})
-
-	// publish while closing
+	// publishers
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			bus.Publish("test", nil)
+			bus.Publish("test", "data")
 		}()
 	}
 
