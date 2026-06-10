@@ -5,9 +5,9 @@ import (
 	"sync/atomic"
 )
 
-type Bus struct {
-	events      map[string][]Handler
-	queue       chan Event
+type Bus[E comparable] struct {
+	events      map[E][]Handler[E]
+	queue       chan Event[E]
 	workerCount int
 
 	lock         sync.RWMutex
@@ -19,10 +19,10 @@ type Bus struct {
 	closed atomic.Bool
 }
 
-func New(workerCount int, queueSize int) *Bus {
-	b := &Bus{
-		events:       map[string][]Handler{},
-		queue:        make(chan Event, queueSize),
+func New[E comparable](workerCount int, queueSize int) *Bus[E] {
+	b := &Bus[E]{
+		events:       map[E][]Handler[E]{},
+		queue:        make(chan Event[E], queueSize),
 		workerCount:  workerCount,
 		done:         make(chan struct{}),
 		panicHandler: func(any) {},
@@ -36,7 +36,7 @@ func New(workerCount int, queueSize int) *Bus {
 	return b
 }
 
-func (b *Bus) Publish(eventID string, data any) {
+func (b *Bus[E]) Publish(eventID E, data any) {
 	b.publishLock.Lock()
 	defer b.publishLock.Unlock()
 
@@ -54,13 +54,13 @@ func (b *Bus) Publish(eventID string, data any) {
 		}
 	}()
 
-	b.queue <- Event{
+	b.queue <- Event[E]{
 		ID:   eventID,
 		Data: data,
 	}
 }
 
-func (b *Bus) Register(eventID string, handler Handler) {
+func (b *Bus[E]) Register(eventID E, handler Handler[E]) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -72,14 +72,14 @@ func (b *Bus) Register(eventID string, handler Handler) {
 	}
 }
 
-func (b *Bus) SetPanicHandler(handler func(any)) {
+func (b *Bus[E]) SetPanicHandler(handler func(any)) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
 	b.panicHandler = handler
 }
 
-func (b *Bus) Close() {
+func (b *Bus[E]) Close() {
 	if b.closed.Swap(true) {
 		return
 	}
@@ -92,7 +92,7 @@ func (b *Bus) Close() {
 	b.wg.Wait()
 }
 
-func (b *Bus) worker() {
+func (b *Bus[E]) worker() {
 	defer b.wg.Done()
 
 	for event := range b.queue {

@@ -1,20 +1,34 @@
 # eventbus-go
 
-A lightweight, concurrent event bus library for Go with worker pool support and panic recovery.
+A lightweight, concurrent event bus library for Go with generic event IDs, worker pool support, and panic recovery.
 
 ## Features
 
-- **Concurrent Event Publishing** - Async event handling with configurable worker pool
-- **Panic Recovery** - Built-in panic handling with custom recovery functions
-- **Multiple Handlers** - Register multiple handlers for the same event
-- **Thread-Safe** - Safe concurrent access with sync.RWMutex
-- **Flexible Data Types** - Support for any data type via `interface{}`
+* **Generic Event IDs** - Use any `comparable` type as an event identifier
+* **Concurrent Event Publishing** - Async event handling with configurable worker pool
+* **Panic Recovery** - Built-in panic handling with custom recovery functions
+* **Multiple Handlers** - Register multiple handlers for the same event
+* **Thread-Safe** - Safe concurrent access with `sync.RWMutex`
+* **Flexible Data Types** - Support for any payload type via `any`
+* **Type-Safe Events** - Avoid string-based event name typos with enums and custom types
 
 ## Installation
 
 ```bash
 go get github.com/dokuzsertkol/eventbus-go
 ```
+
+## Why Generics?
+
+Unlike traditional event bus implementations that rely on string-based event names, `eventbus-go` allows any `comparable` type to be used as an event identifier.
+
+Benefits include:
+
+* Compile-time type safety
+* IDE autocomplete support
+* Elimination of string typos
+* Support for enums (`iota`)
+* Support for custom event identifier types
 
 ## Quick Start
 
@@ -25,69 +39,87 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/dokuzsertkol/eventbus-go"
 )
 
+type EventID string
+
+const (
+	EventGreeting EventID = "greeting"
+)
+
 func main() {
-	// Create a new bus with 2 workers and queue size of 10
-	bus := eventbus.New(2, 10)
+	bus := eventbus.New[EventID](2, 10)
 	defer bus.Close()
 
-	// Register an event handler
-	bus.Register("greeting", func(e eventbus.Event) {
+	bus.Register(EventGreeting, func(e eventbus.Event[EventID]) {
 		fmt.Println("Hello:", e.Data)
 	})
 
-	// Publish an event
-	bus.Publish("greeting", "World")
+	bus.Publish(EventGreeting, "World")
 }
 ```
 
 ## API
 
-### `New(workerCount int, queueSize int) *Bus`
+### `New[E comparable](workerCount int, queueSize int) *Bus[E]`
 
 Creates a new event bus instance.
 
-- `workerCount`: Number of concurrent workers to process events
-- `queueSize`: Size of the event queue buffer
+Parameters:
+
+* `workerCount` - Number of worker goroutines processing events
+* `queueSize` - Size of the internal buffered event queue
 
 ```go
-bus := eventbus.New(4, 100)
+bus := eventbus.New[EventID](4, 100)
 ```
 
-### `Register(eventID string, handler Handler)`
+### `Register(eventID E, handler Handler[E])`
 
-Registers a handler for a specific event ID. Multiple handlers can be registered for the same event.
+Registers a handler for a specific event identifier.
+
+Multiple handlers may be registered for the same event.
 
 ```go
-bus.Register("user.created", func(e eventbus.Event) {
+type EventID string
+
+const (
+	EventUserCreated EventID = "user.created"
+)
+
+bus.Register(EventUserCreated, func(e eventbus.Event[EventID]) {
 	user := e.Data.(User)
+
 	fmt.Printf("User created: %s\n", user.Name)
 })
 ```
 
-### `Publish(eventID string, data any)`
+### `Publish(eventID E, data any)`
 
-Publishes an event to the bus. The publish operation is non-blocking.
+Publishes an event asynchronously.
 
 ```go
-bus.Publish("user.created", User{ID: 1, Name: "John"})
+bus.Publish(EventUserCreated, User{
+	ID:   1,
+	Name: "John",
+})
 ```
 
 ### `SetPanicHandler(handler func(any))`
 
-Sets a custom panic handler to recover from panics in event handlers.
+Sets a custom panic handler used to recover from panics occurring inside event handlers.
 
 ```go
 bus.SetPanicHandler(func(r any) {
-	log.Printf("Panic recovered: %v\n", r)
+	log.Printf("Recovered panic: %v\n", r)
 })
 ```
 
 ### `Close()`
 
-Closes the event bus and waits for all events to be processed.
+Stops the event bus and waits for all queued events to be processed.
 
 ```go
 defer bus.Close()
@@ -95,86 +127,155 @@ defer bus.Close()
 
 ## Examples
 
-### Handling Multiple Event Types
+### String-Based Event IDs
 
 ```go
-bus := eventbus.New(2, 10)
+type EventID string
+
+const (
+	EventGreeting EventID = "greeting"
+	EventCounter  EventID = "counter"
+)
+
+bus := eventbus.New[EventID](2, 10)
 defer bus.Close()
 
-// String handler
-bus.Register("greeting", func(e eventbus.Event) {
+bus.Register(EventGreeting, func(e eventbus.Event[EventID]) {
 	fmt.Println("Message:", e.Data.(string))
 })
 
-// Integer handler
-bus.Register("counter", func(e eventbus.Event) {
+bus.Register(EventCounter, func(e eventbus.Event[EventID]) {
 	fmt.Println("Count:", e.Data.(int))
 })
 
-bus.Publish("greeting", "Hello")
-bus.Publish("counter", 42)
+bus.Publish(EventGreeting, "Hello")
+bus.Publish(EventCounter, 42)
 ```
 
-### Custom Types
+### Enum-Style Event IDs
 
 ```go
+type EventID int
+
+const (
+	EventUserCreated EventID = iota
+	EventUserUpdated
+	EventUserDeleted
+)
+
+bus := eventbus.New[EventID](4, 100)
+
+bus.Register(EventUserCreated, func(e eventbus.Event[EventID]) {
+	fmt.Println("User created")
+})
+
+bus.Publish(EventUserCreated, nil)
+```
+
+### Custom Payload Types
+
+```go
+type EventID string
+
+const (
+	EventUserSignup EventID = "user.signup"
+)
+
 type User struct {
 	ID   int
 	Name string
 }
 
-bus.Register("user.signup", func(e eventbus.Event) {
+bus.Register(EventUserSignup, func(e eventbus.Event[EventID]) {
 	user := e.Data.(User)
-	fmt.Printf("New user: %s (ID: %d)\n", user.Name, user.ID)
+
+	fmt.Printf(
+		"New user: %s (ID: %d)\n",
+		user.Name,
+		user.ID,
+	)
 })
 
-bus.Publish("user.signup", User{ID: 1, Name: "Alice"})
+bus.Publish(EventUserSignup, User{
+	ID:   1,
+	Name: "Alice",
+})
 ```
+
+### Custom Event Identifier Types
+
+```go
+type EventID struct {
+	Domain string
+	Action string
+}
+
+bus := eventbus.New[EventID](2, 10)
+
+bus.Register(EventID{
+	Domain: "user",
+	Action: "created",
+}, func(e eventbus.Event[EventID]) {
+	fmt.Println("User created")
+})
+
+bus.Publish(EventID{
+	Domain: "user",
+	Action: "created",
+}, nil)
+```
+
+Note: All fields inside the struct must be comparable.
 
 ### Type Switch Pattern
 
 ```go
-bus.Register("universal", func(e eventbus.Event) {
+bus.Register(EventUniversal, func(e eventbus.Event[EventID]) {
 	switch v := e.Data.(type) {
 	case string:
 		fmt.Println("String:", v)
+
 	case int:
 		fmt.Println("Integer:", v)
+
 	case User:
 		fmt.Println("User:", v.Name)
+
 	default:
 		fmt.Println("Unknown type:", v)
 	}
 })
 ```
 
-### Error Handling
+### Panic Recovery
 
 ```go
 bus.SetPanicHandler(func(r any) {
-	log.Printf("Panic in event handler: %v\n", r)
+	log.Printf("Panic in handler: %v\n", r)
 })
 
-bus.Register("risky", func(e eventbus.Event) {
-	// Panic will be caught by the panic handler
+bus.Register(EventRisky, func(e eventbus.Event[EventID]) {
 	panic("something went wrong")
 })
 ```
 
 ## How It Works
 
-1. **Event Registration** - Handlers are registered for specific event IDs
-2. **Publishing** - Events are published to a buffered channel
-3. **Processing** - Worker goroutines process events from the queue
-4. **Execution** - All handlers for an event are executed sequentially
-5. **Panic Recovery** - Any panic in a handler is caught and passed to the panic handler
+1. Event handlers are registered for specific event identifiers.
+2. Events are published to an internal buffered queue.
+3. Worker goroutines consume events concurrently.
+4. Registered handlers are executed sequentially for each event.
+5. Panics are recovered and forwarded to the configured panic handler.
 
 ## Thread Safety
 
 The event bus is fully thread-safe:
-- Event registration and publishing are protected by `sync.RWMutex`
-- Worker goroutines safely process events from a shared channel
-- All operations can be called concurrently from multiple goroutines
+
+* Event registration is protected by `sync.RWMutex`
+* Event publishing is safe from multiple goroutines
+* Worker goroutines process events concurrently
+* Generic event identifiers (`E comparable`) are safely handled
+* All public methods may be called concurrently
 
 ## Testing
 
@@ -184,25 +285,36 @@ Run the test suite:
 go test -v
 ```
 
+Run the race detector:
+
+```bash
+go test -race
+```
+
 ## Configuration Tips
 
 ### Worker Count
-- Use more workers for I/O-bound operations
-- Use fewer workers (1-2) for CPU-bound operations
-- Start with `runtime.NumCPU()` for optimal performance
+
+* More workers are usually beneficial for I/O-bound handlers
+* Fewer workers may be preferable for CPU-heavy workloads
+* A good starting point is `runtime.NumCPU()`
 
 ### Queue Size
-- Larger queue = more memory but better for burst traffic
-- Smaller queue = lower memory but may drop events if full
-- Choose based on your event publishing patterns
+
+* Larger queue sizes absorb traffic bursts better
+* Smaller queue sizes reduce memory usage
+* Choose a size based on expected event throughput
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome.
+
+Feel free to open issues, submit pull requests, or suggest improvements.
 
 ## License
 
-This project is open source and available under the GNU General Public License v3.0 (GPLv3).
+This project is licensed under the GNU General Public License v3.0 (GPLv3).
+
 See the LICENSE file for details.
 
 ## Author

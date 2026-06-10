@@ -8,7 +8,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	if bus == nil {
 		t.Fatal("bus is nil")
 	}
@@ -16,13 +16,13 @@ func TestNew(t *testing.T) {
 }
 
 func TestRegisterAndPublish(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var called bool
 	var mu sync.Mutex
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		mu.Lock()
 		called = true
 		mu.Unlock()
@@ -39,15 +39,15 @@ func TestRegisterAndPublish(t *testing.T) {
 }
 
 func TestMultipleHandlers(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var counter int32
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		atomic.AddInt32(&counter, 1)
 	})
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		atomic.AddInt32(&counter, 1)
 	})
 
@@ -60,18 +60,18 @@ func TestMultipleHandlers(t *testing.T) {
 }
 
 func TestDifferentEventIDs(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var event1Called, event2Called bool
 	var mu sync.Mutex
 
-	bus.Register("event1", func(e Event) {
+	bus.Register("event1", func(e Event[string]) {
 		mu.Lock()
 		event1Called = true
 		mu.Unlock()
 	})
-	bus.Register("event2", func(e Event) {
+	bus.Register("event2", func(e Event[string]) {
 		mu.Lock()
 		event2Called = true
 		mu.Unlock()
@@ -91,14 +91,14 @@ func TestDifferentEventIDs(t *testing.T) {
 }
 
 func TestDataPassing(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	expected := "test data"
 	var received string
 	var mu sync.Mutex
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		mu.Lock()
 		received = e.Data.(string)
 		mu.Unlock()
@@ -115,7 +115,7 @@ func TestDataPassing(t *testing.T) {
 }
 
 func TestPanicRecovery(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var panicCalled bool
@@ -127,7 +127,7 @@ func TestPanicRecovery(t *testing.T) {
 		mu.Unlock()
 	})
 
-	bus.Register("panic", func(e Event) {
+	bus.Register("panic", func(e Event[string]) {
 		panic("test panic")
 	})
 
@@ -142,7 +142,7 @@ func TestPanicRecovery(t *testing.T) {
 }
 
 func TestPanicHandlerPropagation(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var mu sync.Mutex
@@ -154,7 +154,7 @@ func TestPanicHandlerPropagation(t *testing.T) {
 		mu.Unlock()
 	})
 
-	bus.Register("panic", func(e Event) {
+	bus.Register("panic", func(e Event[string]) {
 		panic("custom error message")
 	})
 
@@ -169,7 +169,7 @@ func TestPanicHandlerPropagation(t *testing.T) {
 }
 
 func TestMultiplePanics(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var panicCount int32
@@ -177,7 +177,7 @@ func TestMultiplePanics(t *testing.T) {
 		atomic.AddInt32(&panicCount, 1)
 	})
 
-	bus.Register("panic", func(e Event) {
+	bus.Register("panic", func(e Event[string]) {
 		panic("test")
 	})
 
@@ -192,10 +192,10 @@ func TestMultiplePanics(t *testing.T) {
 }
 
 func TestGracefulShutdown(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 
 	var processed int32
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		time.Sleep(50 * time.Millisecond)
 		atomic.AddInt32(&processed, 1)
 	})
@@ -212,10 +212,10 @@ func TestGracefulShutdown(t *testing.T) {
 }
 
 func TestPublishAfterClose(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 
 	var called bool
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		called = true
 	})
 
@@ -229,21 +229,22 @@ func TestPublishAfterClose(t *testing.T) {
 }
 
 func TestRegisterAfterClose(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	bus.Close()
 
 	// should not panic
-	bus.Register("test", func(e Event) {})
+	bus.Register("test", func(e Event[string]) {})
 }
 
 func TestMultipleClose(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	bus.Close()
 	bus.Close() // second close should be safe
 	bus.Close() // third close should be safe
 }
+
 func TestPublishDuringClose(t *testing.T) {
-	bus := New(5, 10)
+	bus := New[string](5, 10)
 
 	var wg sync.WaitGroup
 
@@ -263,10 +264,10 @@ func TestPublishDuringClose(t *testing.T) {
 }
 
 func TestPendingEventsAfterClose(t *testing.T) {
-	bus := New(1, 5)
+	bus := New[string](1, 5)
 	var processed int32
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		time.Sleep(100 * time.Millisecond)
 		atomic.AddInt32(&processed, 1)
 	})
@@ -284,11 +285,11 @@ func TestPendingEventsAfterClose(t *testing.T) {
 }
 
 func TestConcurrentPublish(t *testing.T) {
-	bus := New(5, 100)
+	bus := New[string](5, 100)
 	defer bus.Close()
 
 	var counter int32
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		atomic.AddInt32(&counter, 1)
 	})
 
@@ -310,7 +311,7 @@ func TestConcurrentPublish(t *testing.T) {
 }
 
 func TestConcurrentRegister(t *testing.T) {
-	bus := New(5, 100)
+	bus := New[string](5, 100)
 	defer bus.Close()
 
 	var wg sync.WaitGroup
@@ -318,14 +319,14 @@ func TestConcurrentRegister(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			bus.Register("test", func(e Event) {})
+			bus.Register("test", func(e Event[string]) {})
 		}(i)
 	}
 	wg.Wait()
 }
 
 func TestConcurrentPublishAndClose(t *testing.T) {
-	bus := New(5, 100)
+	bus := New[string](5, 100)
 
 	var wg sync.WaitGroup
 
@@ -349,7 +350,7 @@ func TestConcurrentPublishAndClose(t *testing.T) {
 }
 
 func TestConcurrentSetPanicHandler(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var wg sync.WaitGroup
@@ -364,11 +365,11 @@ func TestConcurrentSetPanicHandler(t *testing.T) {
 }
 
 func TestZeroWorker(t *testing.T) {
-	bus := New(0, 10)
+	bus := New[string](0, 10)
 	defer bus.Close()
 
 	var called bool
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		called = true
 	})
 
@@ -381,13 +382,13 @@ func TestZeroWorker(t *testing.T) {
 }
 
 func TestZeroQueueSize(t *testing.T) {
-	bus := New(2, 0)
+	bus := New[string](2, 0)
 	defer bus.Close()
 
 	var mu sync.Mutex
 	var called bool
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		mu.Lock()
 		called = true
 		mu.Unlock()
@@ -404,13 +405,13 @@ func TestZeroQueueSize(t *testing.T) {
 }
 
 func TestDifferentDataTypes(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var results []string
 	var mu sync.Mutex
 
-	bus.Register("printer", func(e Event) {
+	bus.Register("printer", func(e Event[string]) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch v := e.Data.(type) {
@@ -436,13 +437,13 @@ func TestDifferentDataTypes(t *testing.T) {
 }
 
 func TestNilData(t *testing.T) {
-	bus := New(2, 10)
+	bus := New[string](2, 10)
 	defer bus.Close()
 
 	var mu sync.Mutex
 	var received any
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		mu.Lock()
 		received = e.Data
 		mu.Unlock()
@@ -459,10 +460,10 @@ func TestNilData(t *testing.T) {
 }
 
 func BenchmarkPublish(b *testing.B) {
-	bus := New(10, 1000)
+	bus := New[string](10, 1000)
 	defer bus.Close()
 
-	bus.Register("test", func(e Event) {})
+	bus.Register("test", func(e Event[string]) {})
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -471,10 +472,10 @@ func BenchmarkPublish(b *testing.B) {
 }
 
 func BenchmarkPublishWithHandler(b *testing.B) {
-	bus := New(10, 1000)
+	bus := New[string](10, 1000)
 	defer bus.Close()
 
-	bus.Register("test", func(e Event) {
+	bus.Register("test", func(e Event[string]) {
 		_ = e.Data.(int)
 	})
 
@@ -485,10 +486,10 @@ func BenchmarkPublishWithHandler(b *testing.B) {
 }
 
 func BenchmarkConcurrentPublish(b *testing.B) {
-	bus := New(10, 1000)
+	bus := New[string](10, 1000)
 	defer bus.Close()
 
-	bus.Register("test", func(e Event) {})
+	bus.Register("test", func(e Event[string]) {})
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -499,11 +500,11 @@ func BenchmarkConcurrentPublish(b *testing.B) {
 }
 
 func BenchmarkPublishWithPanicHandler(b *testing.B) {
-	bus := New(10, 1000)
+	bus := New[string](10, 1000)
 	defer bus.Close()
 
 	bus.SetPanicHandler(func(r any) {})
-	bus.Register("test", func(e Event) {})
+	bus.Register("test", func(e Event[string]) {})
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

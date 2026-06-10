@@ -1,3 +1,3 @@
 package eventbus
 
-type Handler func(Event)
+type Handler[E comparable] func(Event[E])

@@ -6,7 +6,15 @@ import (
 	"github.com/dokuzsertkol/eventbus-go"
 )
 
-// Custom types
+type EventType int
+
+const (
+	EventGreeting EventType = iota
+	EventDouble
+	EventUserCreated
+	EventPrinter
+)
+
 type User struct {
 	ID   int
 	Name string
@@ -18,23 +26,19 @@ type Product struct {
 }
 
 func main() {
-	// create bus with 2 workers and 10 queue size
-	bus := eventbus.New(2, 10)
+	bus := eventbus.New[EventType](2, 10)
 	defer bus.Close()
 
-	// set panic handler
 	bus.SetPanicHandler(func(r any) {
 		fmt.Printf("Panic caught: %v\n", r)
 	})
 
-	// string handler
-	bus.Register("greeting", func(e eventbus.Event) {
+	bus.Register(EventGreeting, func(e eventbus.Event[EventType]) {
 		msg := e.Data.(string)
 		fmt.Printf("Message: %s\n", msg)
 	})
 
-	// int handler with safe assertion
-	bus.Register("double", func(e eventbus.Event) {
+	bus.Register(EventDouble, func(e eventbus.Event[EventType]) {
 		if num, ok := e.Data.(int); ok {
 			fmt.Printf("%d * 9 = %d\n", num, num*9)
 		} else {
@@ -42,14 +46,12 @@ func main() {
 		}
 	})
 
-	// custom struct handler
-	bus.Register("user.created", func(e eventbus.Event) {
+	bus.Register(EventUserCreated, func(e eventbus.Event[EventType]) {
 		user := e.Data.(User)
 		fmt.Printf("User created: %d - %s\n", user.ID, user.Name)
 	})
 
-	// multiple types in one handler (type switch)
-	bus.Register("printer", func(e eventbus.Event) {
+	bus.Register(EventPrinter, func(e eventbus.Event[EventType]) {
 		switch v := e.Data.(type) {
 		case string:
 			fmt.Printf("String: %s\n", v)
@@ -64,22 +66,16 @@ func main() {
 		}
 	})
 
-	// string
-	bus.Publish("greeting", "Feel free to contribute!")
+	bus.Publish(EventGreeting, "Feel free to contribute!")
+	bus.Publish(EventDouble, 9)
+	bus.Publish(EventDouble, "not a number")
+	bus.Publish(EventUserCreated, User{ID: 1, Name: "DokuzSertkol"})
+	bus.Publish(EventPrinter, "string value")
+	bus.Publish(EventPrinter, 999)
+	bus.Publish(EventPrinter, User{ID: 9, Name: "DokuzSertkol"})
+	bus.Publish(EventPrinter, Product{ID: "9", Price: 99.99})
+	bus.Publish(EventUserCreated, "invalid user")
 
-	// integer
-	bus.Publish("double", 9)
-	bus.Publish("double", "not a number") // will trigger panic handler
-
-	// custom struct
-	bus.Publish("user.created", User{ID: 1, Name: "DokuzSertkol"})
-
-	// type switch examples
-	bus.Publish("printer", "string value")
-	bus.Publish("printer", 999)
-	bus.Publish("printer", User{ID: 9, Name: "DokuzSertkol"})
-	bus.Publish("printer", Product{ID: "9", Price: 99.99})
-
-	// wrong type (panic handler will catch)
-	bus.Publish("user.created", "invalid user") // string instead of User
+	fmt.Println("Press Enter to exit...")
+	fmt.Scanln()
 }
